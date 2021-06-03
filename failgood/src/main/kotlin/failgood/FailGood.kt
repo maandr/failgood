@@ -6,15 +6,14 @@ import failgood.internal.ContextPath
 import failgood.internal.ContextTreeReporter
 import failgood.internal.ExceptionPrettyPrinter
 import failgood.internal.Junit4Reporter
-import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.attribute.FileTime
 import kotlin.reflect.KClass
+import kotlin.streams.asSequence
 import kotlin.system.exitProcess
 
 
@@ -171,7 +170,7 @@ object FailGood {
         classIncludeRegex: Regex = Regex(".*Test.class\$"),
         newerThan: FileTime? = null,
         randomTestClass: KClass<*> = findCaller()
-    ): MutableList<KClass<*>> {
+    ): List<KClass<*>> {
         val classloader = randomTestClass.java.classLoader
         val root = Paths.get(randomTestClass.java.protectionDomain.codeSource.location.path)
         return findClassesInPath(root, classloader, classIncludeRegex, newerThan)
@@ -183,25 +182,19 @@ object FailGood {
         classIncludeRegex: Regex = Regex(".*Test.class\$"),
         newerThan: FileTime? = null,
         matchLambda: (String) -> Boolean = { true }
-    ): MutableList<KClass<*>> {
-        val results = mutableListOf<KClass<*>>()
-        Files.walkFileTree(
-            root,
-            object : SimpleFileVisitor<Path>() {
-                override fun visitFile(file: Path?, attrs: BasicFileAttributes?): FileVisitResult {
-                    val path = root.relativize(file!!).toString()
-                    if (path.matches(classIncludeRegex) && (newerThan == null || attrs!!.lastModifiedTime() > newerThan)) {
-                        val className = path.substringBefore(".class").replace("/", ".")
-                        if (matchLambda(className))
-                            results.add(
-                                classloader.loadClass(className).kotlin
-                            )
-                    }
-                    return FileVisitResult.CONTINUE
-                }
-            }
-        )
-        return results
+    ): List<KClass<*>> {
+        val paths = Files.walk(root)
+        return paths.asSequence().map {
+            Pair(root.relativize(it).toString(), Files.readAttributes(it, BasicFileAttributes::class.java))
+        }.filter { (path: String, attrs: BasicFileAttributes) ->
+            path.matches(classIncludeRegex) && (newerThan == null || attrs!!.lastModifiedTime() > newerThan)
+        }.map { (path, _) ->
+            path.substringBefore(".class").replace("/", ".")
+        }.filter {
+            matchLambda(it)
+        }.map {
+            classloader.loadClass(it).kotlin
+        }.toList()
     }
 
     /**
