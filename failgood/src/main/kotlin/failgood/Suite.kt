@@ -88,6 +88,8 @@ class Suite(val contextProviders: Flow<ContextProvider>) {
                         val resolvedContexts = contextInfos.awaitAll()
                         val results = resolvedContexts.flatMap { it.tests.values }.awaitAll()
                         resolvedContexts.forEach { it.afterSuiteCallbacks.forEach { callback -> callback.invoke() } }
+                        if (results.isEmpty())
+                            throw EmptySuiteException()
                         SuiteResult(
                             results,
                             results.filter { it.isFailed },

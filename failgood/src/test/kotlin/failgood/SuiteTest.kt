@@ -18,7 +18,7 @@ class SuiteTest {
                     test("firstTest") { expectThat(true).isTrue() }
                     test("failing test") { expectThat(true).isFalse() }
                 }
-            pending("Empty Suite fails") { expectThrows<RuntimeException> { Suite(listOf()).run() } }
+            it("Empty Suite fails") { expectThrows<RuntimeException> { Suite(listOf()).run() } }
             pending("create reproducible output") {
                 val contexts = (1 until 2).map { context.copy(name = "context $it") }
                 // currently two test runs don't give the same result because the test duration is
