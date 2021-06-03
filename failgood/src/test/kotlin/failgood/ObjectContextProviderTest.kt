@@ -4,11 +4,11 @@ import failgood.docs.ClassTestContextTest
 import failgood.docs.ObjectMultipleContextsTest
 import org.junit.platform.commons.annotation.Testable
 import strikt.api.expectThat
-import strikt.assertions.*
-
-fun main() {
-    FailGood.runTest("The ObjectContextProvider > provides a context from an class in a kotlin class (MyTest::class.java)")
-}
+import strikt.assertions.all
+import strikt.assertions.hasSize
+import strikt.assertions.isA
+import strikt.assertions.isEqualTo
+import strikt.assertions.single
 
 @Testable
 class ObjectContextProviderTest {

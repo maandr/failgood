@@ -21,6 +21,7 @@ dependencies {
     implementation(kotlin("stdlib-jdk8"))
     compileOnly("org.pitest:pitest:$pitestVersion")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:$coroutinesVersion")
     testImplementation("io.strikt:strikt-core:$striktVersion")
     testImplementation("org.pitest:pitest:$pitestVersion")
     compileOnly("org.junit.platform:junit-platform-engine:$junitPlatformVersion")

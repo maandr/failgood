@@ -1,6 +1,5 @@
 package failgood.mock
 
-import failgood.FailGood
 import failgood.describe
 import org.junit.platform.commons.annotation.Testable
 import strikt.api.expectThat
@@ -8,10 +7,6 @@ import strikt.api.expectThrows
 import strikt.assertions.containsExactly
 import strikt.assertions.isEqualTo
 import strikt.assertions.isNotEqualTo
-
-fun main() {
-    FailGood.runTest()
-}
 
 @Testable
 class MockTest {

@@ -6,6 +6,10 @@ import failgood.internal.ContextPath
 import failgood.internal.ContextTreeReporter
 import failgood.internal.ExceptionPrettyPrinter
 import failgood.internal.Junit4Reporter
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.stream.consumeAsFlow
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
@@ -13,7 +17,6 @@ import java.nio.file.Paths
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.attribute.FileTime
 import kotlin.reflect.KClass
-import kotlin.streams.asSequence
 import kotlin.system.exitProcess
 
 
@@ -170,7 +173,7 @@ object FailGood {
         classIncludeRegex: Regex = Regex(".*Test.class\$"),
         newerThan: FileTime? = null,
         randomTestClass: KClass<*> = findCaller()
-    ): List<KClass<*>> {
+    ): Flow<KClass<*>> {
         val classloader = randomTestClass.java.classLoader
         val root = Paths.get(randomTestClass.java.protectionDomain.codeSource.location.path)
         return findClassesInPath(root, classloader, classIncludeRegex, newerThan)
@@ -182,9 +185,9 @@ object FailGood {
         classIncludeRegex: Regex = Regex(".*Test.class\$"),
         newerThan: FileTime? = null,
         matchLambda: (String) -> Boolean = { true }
-    ): List<KClass<*>> {
-        val paths = Files.walk(root)
-        return paths.asSequence().map {
+    ): Flow<KClass<*>> {
+        val paths = Files.walk(root).consumeAsFlow()
+        return paths.map {
             Pair(root.relativize(it).toString(), Files.readAttributes(it, BasicFileAttributes::class.java))
         }.filter { (path: String, attrs: BasicFileAttributes) ->
             path.matches(classIncludeRegex) && (newerThan == null || attrs!!.lastModifiedTime() > newerThan)
@@ -194,7 +197,7 @@ object FailGood {
             matchLambda(it)
         }.map {
             classloader.loadClass(it).kotlin
-        }.toList()
+        }
     }
 
     /**
@@ -214,8 +217,8 @@ object FailGood {
         Files.write(timeStampPath, byteArrayOf())
         println("last run:$lastRun")
         val classes = findTestClasses(newerThan = lastRun, randomTestClass = randomTestClass)
-        println("will run: ${classes.joinToString { it.simpleName!! }}")
-        if (classes.isNotEmpty()) Suite(classes.map { ObjectContextProvider(it) }).run().check(false)
+//        if (classes.isNotEmpty())
+        Suite(classes.map { ObjectContextProvider(it) }).run().check(false)
     }
 
     suspend fun runAllTests(writeReport: Boolean = false) {
@@ -228,7 +231,7 @@ object FailGood {
             .forEach { (t, s) -> println("\nthread:${t.name}: ${s.joinToString("\n")}") }
     }
 
-    fun runTest(singleTest: String? = null) {
+    suspend fun runTest(singleTest: String? = null) {
         val classes = listOf(javaClass.classLoader.loadClass((findCallerName().substringBefore("Kt"))).kotlin)
         val suite = Suite.fromClasses(classes)
         if (singleTest == null)

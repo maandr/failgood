@@ -26,6 +26,10 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.asFlow
+import kotlinx.coroutines.flow.flatMapConcat
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.platform.engine.DiscoveryFilter
@@ -48,6 +52,7 @@ import org.junit.platform.engine.support.descriptor.FilePosition
 import org.junit.platform.engine.support.descriptor.FileSource
 import java.io.File
 import java.nio.file.Paths
+import kotlin.reflect.KClass
 
 object FailGoodJunitTestEngineConstants {
     const val id = "failgood"
@@ -71,7 +76,7 @@ class FailGoodJunitTestEngine : TestEngine {
         val lazy = discoveryRequest.configurationParameters.getBoolean(CONFIG_KEY_LAZY).orElse(false)
 
         return runBlocking(Dispatchers.Default) {
-            val providers: List<ContextProvider> = findContexts(discoveryRequest)
+            val providers: Flow<ContextProvider> = findContexts(discoveryRequest)
             val suite = Suite(providers)
             val executionListener = JunitExecutionListener()
 
@@ -227,7 +232,7 @@ class FailGoodJunitTestEngine : TestEngine {
         println("finished after ${uptime()}")
     }
 
-    private suspend fun findContexts(discoveryRequest: EngineDiscoveryRequest): List<ContextProvider> {
+    private suspend fun findContexts(discoveryRequest: EngineDiscoveryRequest): Flow<ContextProvider> {
         if (debug) {
             println(discoveryRequestToString(discoveryRequest))
         }
@@ -242,25 +247,27 @@ class FailGoodJunitTestEngine : TestEngine {
             discoveryRequest.getFiltersByType(ClassNameFilter::class.java).map { it.toPredicate() }
         return when {
             classPathSelectors.isNotEmpty() -> {
-                return classPathSelectors.flatMap { classPathSelector ->
+                val flow: Flow<ObjectContextProvider> = classPathSelectors.asFlow().flatMapConcat { classPathSelector ->
                     val uri = classPathSelector.classpathRoot
-                    findClassesInPath(
+                    val flow: Flow<KClass<*>> = findClassesInPath(
                         Paths.get(uri),
                         Thread.currentThread().contextClassLoader,
-                        matchLambda = { className -> classNamePredicates.all { it.test(className) } }).map {
+                        matchLambda = { className -> classNamePredicates.all { it.test(className) } })
+                    flow.map {
                         ObjectContextProvider(it)
                     }
                 }
+                return flow
             }
             classSelectors.isNotEmpty() -> {
                 val classes =
                     if (classSelectors.size == 1) classSelectors else classSelectors.filter { it.className.endsWith("Test") }
                 classes
-                    .map { ObjectContextProvider(it.javaClass.kotlin) }
+                    .map { ObjectContextProvider(it.javaClass.kotlin) }.asFlow()
             }
 
             singleClassSelector != null -> {
-                listOf(ObjectContextProvider(singleClassSelector.javaClass))
+                listOf(ObjectContextProvider(singleClassSelector.javaClass)).asFlow()
             }
             else -> {
                 val message = "unknown selector in discovery request: ${

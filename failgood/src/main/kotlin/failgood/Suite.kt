@@ -12,6 +12,12 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.asFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEmpty
+import kotlinx.coroutines.flow.toCollection
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -22,19 +28,27 @@ import java.util.concurrent.TimeUnit
 import kotlin.reflect.KClass
 
 const val DEFAULT_CONTEXT_TIMEOUT: Long = 20000
-class Suite(val contextProviders: Collection<ContextProvider>) {
+
+class Suite(val contextProviders: Flow<ContextProvider>) {
     companion object {
-        fun fromContexts(rootContexts: Collection<RootContext>) =
+        fun fromContexts(rootContexts: Flow<RootContext>) =
             Suite(rootContexts.map { ContextProvider { listOf(it) } })
+
+        fun fromContexts(rootContexts: List<RootContext>) =
+            fromContexts(rootContexts.asFlow())
+
+        fun fromClasses(classes: Flow<KClass<*>>) =
+            Suite(classes.map { ObjectContextProvider(it) })
 
         fun fromClasses(classes: List<KClass<*>>) =
             Suite(classes.map { ObjectContextProvider(it) })
     }
 
     init {
-        if (contextProviders.isEmpty()) throw EmptySuiteException()
+        contextProviders.onEmpty { throw EmptySuiteException() }
     }
 
+    constructor(contextProviders: List<ContextProvider>) : this(contextProviders.asFlow())
     constructor(rootContext: RootContext) :
             this(listOf(ContextProvider { listOf(rootContext) }))
 
@@ -100,7 +114,7 @@ class Suite(val contextProviders: Collection<ContextProvider>) {
         executeTests: Boolean = true,
         listener: ExecutionListener = NullExecutionListener
     ): List<Deferred<ContextInfo>> {
-        return contextProviders
+        return contextProviders.toCollection(mutableListOf())
             .map { coroutineScope.async { it.getContexts() } }.flatMap { it.await() }.sortedBy { it.order }
             .map { context: RootContext ->
                 coroutineScope.async {
@@ -123,13 +137,13 @@ class Suite(val contextProviders: Collection<ContextProvider>) {
             }
     }
 
-    fun runSingle(test: String): TestResult {
+    suspend fun runSingle(test: String): TestResult {
         val contextName = test.substringBefore(">").trim()
-        val context = contextProviders.flatMap { it.getContexts() }.single {
+        val context = contextProviders.toCollection(mutableListOf()).flatMap { it.getContexts() }.single {
             it.name == contextName
         }
         val desc = ContextPath.fromString(test)
-        return runBlocking {
+        return coroutineScope {
             val resourcesCloser = ResourcesCloser(this)
             SingleTestExecutor(context, desc, object : TestDSL, ResourcesDSL by resourcesCloser {
                 override suspend fun println(body: String) {
