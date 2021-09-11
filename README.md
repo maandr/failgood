@@ -76,7 +76,7 @@ repositories {
 }
 
 dependencies {
-    testImplementation("dev.failgood:failgood:0.3.0")
+    testImplementation("dev.failgood:failgood:0.4.6")
 }
 ```
 
