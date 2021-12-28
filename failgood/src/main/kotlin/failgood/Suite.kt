@@ -1,6 +1,6 @@
 package failgood
 
-import failgood.internal.ContextExecutor
+import failgood.internal.ContextCollection
 import failgood.internal.ContextInfo
 import failgood.internal.ContextPath
 import failgood.internal.ContextResult
@@ -15,7 +15,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -126,27 +125,13 @@ class Suite(val contextProviders: Collection<ContextProvider>) {
         executionFilter: TestFilterProvider = ExecuteAllTestFilterProvider,
         listener: ExecutionListener = NullExecutionListener
     ): List<FoundContext> {
-        return contextProviders
-            .map { coroutineScope.async { it.getContexts() } }.flatMap { it.await() }.sortedBy { it.order }
-            .map { context: RootContext ->
-                val testFilter = executionFilter.forClass(context.sourceInfo.className)
-                FoundContext(
-                    context,
-                    coroutineScope.async {
-                        if (!context.disabled) {
-                            ContextExecutor(
-                                context,
-                                coroutineScope,
-                                !executeTests,
-                                listener,
-                                testFilter,
-                                timeoutMillis
-                            ).execute()
-                        } else
-                            ContextInfo(emptyList(), mapOf(), setOf())
-                    }
-                )
-            }
+        return ContextCollection(contextProviders).investigate(
+            coroutineScope,
+            executionFilter,
+            executeTests,
+            listener,
+            timeoutMillis
+        )
     }
 
     fun runSingle(test: String): TestResult {
