@@ -23,7 +23,15 @@ import kotlin.system.exitProcess
 
 const val DEFAULT_TIMEOUT: Long = 40000
 
-class Suite(val contextProviders: Collection<ContextProvider>) {
+private fun getTimeout() = System.getenv("TIMEOUT").let {
+    when (it) {
+        null -> DEFAULT_TIMEOUT
+        "" -> null
+        else -> it.toLongOrNull() ?: throw FailGoodException("TIMEOUT must be a number or an empty string")
+    }
+} ?: Long.MAX_VALUE
+
+class Suite(val contextProviders: Collection<ContextProvider>, private val timeoutMillis: Long = getTimeout()) {
     companion object {
         fun fromContexts(rootContexts: Collection<RootContext>) =
             Suite(rootContexts.map { ContextProvider { listOf(it) } })
@@ -50,7 +58,7 @@ class Suite(val contextProviders: Collection<ContextProvider>) {
         return runBlocking(dispatcher) {
             val contextInfos = findTests(this)
             if (!silent) {
-                printResults(this, contextInfos)
+                contextInfos.printResults(this)
             }
             awaitTestResult(contextInfos)
         }
@@ -78,11 +86,11 @@ class Suite(val contextProviders: Collection<ContextProvider>) {
         )
     }
 
-    private fun printResults(coroutineScope: CoroutineScope, contextInfos: List<ContextCollection.FoundContext>) {
-        contextInfos.forEach {
+    private fun List<ContextCollection.FoundContext>.printResults(coroutineScope: CoroutineScope) {
+        forEach {
             coroutineScope.launch {
                 val context = try {
-                    withTimeout(this@Suite.timeoutMillis) { it.result.await() }
+                    withTimeout(timeoutMillis) { it.result.await() }
                 } catch (e: CancellationException) {
                     println("context ${it.context.name} never finished")
                     exitProcess(-1)
@@ -105,15 +113,6 @@ class Suite(val contextProviders: Collection<ContextProvider>) {
             }
         }
     }
-
-    // set timeout to the timeout in milliseconds, an empty string to turn it off
-    private val timeoutMillis: Long = System.getenv("TIMEOUT").let {
-        when (it) {
-            null -> DEFAULT_TIMEOUT
-            "" -> null
-            else -> it.toLongOrNull() ?: throw FailGoodException("TIMEOUT must be a number or an empty string")
-        }
-    } ?: Long.MAX_VALUE
 
     internal suspend fun findTests(
         coroutineScope: CoroutineScope,
