@@ -3,8 +3,8 @@ package failgood.internal
 import failgood.ContextProvider
 import failgood.ExecutionListener
 import failgood.RootContext
-import failgood.Suite
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 
 internal class ContextCollection(private val contextProviders: Collection<ContextProvider>) {
@@ -14,11 +14,11 @@ internal class ContextCollection(private val contextProviders: Collection<Contex
         executeTests: Boolean,
         listener: ExecutionListener,
         timeoutMillis: Long
-    ): List<Suite.FoundContext> = contextProviders
+    ): List<FoundContext> = contextProviders
         .map { coroutineScope.async { it.getContexts() } }.flatMap { it.await() }.sortedBy { it.order }
         .map { context: RootContext ->
             val testFilter = executionFilter.forClass(context.sourceInfo.className)
-            Suite.FoundContext(
+            FoundContext(
                 context,
                 coroutineScope.async {
                     if (!context.disabled) {
@@ -35,4 +35,6 @@ internal class ContextCollection(private val contextProviders: Collection<Contex
                 }
             )
         }
+
+    data class FoundContext(val context: RootContext, val result: Deferred<ContextResult>)
 }

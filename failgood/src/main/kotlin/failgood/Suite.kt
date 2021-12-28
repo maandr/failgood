@@ -3,7 +3,6 @@ package failgood
 import failgood.internal.ContextCollection
 import failgood.internal.ContextInfo
 import failgood.internal.ContextPath
-import failgood.internal.ContextResult
 import failgood.internal.ContextTreeReporter
 import failgood.internal.ExecuteAllTestFilterProvider
 import failgood.internal.FailedContext
@@ -12,7 +11,6 @@ import failgood.internal.SingleTestExecutor
 import failgood.internal.TestFilterProvider
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitAll
@@ -59,7 +57,7 @@ class Suite(val contextProviders: Collection<ContextProvider>) {
     }
 
     private suspend fun awaitTestResult(
-        contextInfos: List<FoundContext>
+        contextInfos: List<ContextCollection.FoundContext>
     ): SuiteResult {
         val resolvedContexts = contextInfos.map { it.result }.awaitAll()
         val successfulContexts = resolvedContexts.filterIsInstance<ContextInfo>()
@@ -80,7 +78,7 @@ class Suite(val contextProviders: Collection<ContextProvider>) {
         )
     }
 
-    private fun printResults(coroutineScope: CoroutineScope, contextInfos: List<FoundContext>) {
+    private fun printResults(coroutineScope: CoroutineScope, contextInfos: List<ContextCollection.FoundContext>) {
         contextInfos.forEach {
             coroutineScope.launch {
                 val context = try {
@@ -117,14 +115,12 @@ class Suite(val contextProviders: Collection<ContextProvider>) {
         }
     } ?: Long.MAX_VALUE
 
-    data class FoundContext(val context: RootContext, val result: Deferred<ContextResult>)
-
     internal suspend fun findTests(
         coroutineScope: CoroutineScope,
         executeTests: Boolean = true,
         executionFilter: TestFilterProvider = ExecuteAllTestFilterProvider,
         listener: ExecutionListener = NullExecutionListener
-    ): List<FoundContext> {
+    ): List<ContextCollection.FoundContext> {
         return ContextCollection(contextProviders).investigate(
             coroutineScope,
             executionFilter,
