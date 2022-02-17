@@ -72,7 +72,7 @@ class Suite(val contextProviders: Collection<ContextProvider>) {
                 when (context) {
                     is CouldNotLoadContext ->
                         CompletableDeferred(
-                            FailedContext(Context(context.jClass.name ?: "unknown"), context.reason)
+                            FailedContext(Context("unknown"), context.reason)
                         )
                     is RootContext -> {
                         val testFilter = executionFilter.forClass(context.sourceInfo.className)
